@@ -14,28 +14,28 @@ use mongodb::{
 
 use super::market::RobloxUser;
 
-pub struct ApiKey(String);
+// pub struct ApiKey(String);
 
-#[rocket::async_trait]
-impl<'r> FromRequest<'r> for ApiKey {
-    type Error = rocket::http::Status;
+// #[rocket::async_trait]
+// impl<'r> FromRequest<'r> for ApiKey {
+//     type Error = rocket::http::Status;
 
-    async fn from_request(request: &'r Request<'_>) -> request::Outcome<'r, Self> {
-        let db: &State<Database> = request.guard::<State<Database>>().await.expect("Database connection not found");
-        match request.headers().get_one("x-api-key") {
-            Some(key) => {
-                // Query your database to check if the API key exists
-                let api_key_exists = db.collection("api_keys").find_one(doc! { "key": key }, None).await.is_ok();
-                if api_key_exists {
-                    Outcome::Success(ApiKey(key.to_string()))
-                } else {
-                    Err(Status::Forbidden)
-                }
-            },
-            None => Err(Status::BadRequest),
-        }
-    }
-}
+//     async fn from_request(request: &'r Request<'_>) -> request::Outcome<'r, Self> {
+//         let db: &State<Database> = request.guard::<State<Database>>().await.expect("Database connection not found");
+//         match request.headers().get_one("x-api-key") {
+//             Some(key) => {
+//                 // Query your database to check if the API key exists
+//                 let api_key_exists = db.collection("api_keys").find_one(doc! { "key": key }, None).await.is_ok();
+//                 if api_key_exists {
+//                     Outcome::Success(ApiKey(key.to_string()))
+//                 } else {
+//                     Err(Status::Forbidden)
+//                 }
+//             },
+//             None => Err(Status::BadRequest),
+//         }
+//     }
+// }
 
 pub async fn insert_users_into_market_data(mut market: Document, roblox_users: &HashMap<u64, RobloxUser>) -> mongodb::error::Result<Document> {
     // If roblox_users is none then get from db

@@ -1,5 +1,3 @@
-#[macro_use] extern crate rocket;
-
 mod objects {
     pub mod market{
         pub mod raw_market;
@@ -17,16 +15,18 @@ use objects::database::*;
 use objects::market::market::{Market, Item};
 
 use dotenv::dotenv;
-use rocket::{State, http::Status, get, routes, Rocket, Build, serde::json::Json};
+use rocket::{launch, State, http::Status, get, routes, Rocket, Build, serde::json::Json, response::content::RawHtml};
+use rocket_okapi::rapidoc::*;
 use std::env;
 
 use routes::apiv1::{
-    latest_market
+    latest_market,
+    recent_market
 };
 
 #[get("/")]
-async fn index() -> &'static str {
-    "<h1>Hello, world!</h1>"
+async fn index() -> RawHtml<&'static str> {
+    RawHtml(r#"<h1>Hello, world!</h1>"#)
 }
 
 #[launch]
@@ -40,7 +40,22 @@ async fn rocket() -> Rocket<Build> {
         }
     };
 
+
     rocket::build()
         .manage(db)
-        .mount("/", routes![index, latest_market])
+        .mount("/", routes![index, latest_market, recent_market])
+        // .mount("/rapidoc", 
+        // make_rapidoc(&RapiDocConfig { 
+        //     title: (),
+        //     general:(),
+        //     ui: (),
+        //     nav: (),
+        //     layout: (),
+        //     hide_show: (),
+        //     schema: (),
+        //     api: (),
+        //     slots: (),
+        //     custom_html: (),
+        //     custom_template_tags: () 
+        // }))
 }

@@ -7,8 +7,10 @@ use std::fmt;
 
 use serde::de::{self, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
+use schemars::JsonSchema;
+// use rocket_okapi::okapi::schemars::JsonSchema;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct RobloxUser {
     #[serde(rename = "_id")]
     pub id: u64,
@@ -50,7 +52,7 @@ impl RobloxUser{
     }
 }
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Debug, Clone, JsonSchema)]
 pub struct Listing {
     pub price: f32,
     pub amount: u32,
@@ -127,7 +129,7 @@ where
     Ok(bson_datetime.to_chrono())
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct Item {
     name: String,
     #[serde(rename = "_id")]
@@ -166,7 +168,7 @@ impl Item {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct Market {
     #[serde(rename = "_id")]
     id: u32,
@@ -204,7 +206,7 @@ impl Market {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct MixedMarket{
     pub items: HashMap<String, Item>
 }
