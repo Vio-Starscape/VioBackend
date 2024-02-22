@@ -1,10 +1,12 @@
-use mongodb::bson::{doc, Document, DateTime};
+use mongodb::bson::{doc, Document};
+use mongodb::bson;
+use chrono::{DateTime, Utc};
 
 use std::collections::HashMap;
 use std::fmt;
 
 use serde::de::{self, SeqAccess, Visitor};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RobloxUser {
@@ -48,34 +50,35 @@ impl RobloxUser{
     }
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 pub struct Listing {
-    vendor: u64,
-    amount: u32,
-    price: f32,
+    pub price: f32,
+    pub amount: u32,
+    pub vendor: RobloxUser,
 }
 
 impl Listing {
-    pub fn new(vendor: u64, amount: u32, price: f32) -> Listing {
+    pub fn new(price: f32, amount: u32, vendor: RobloxUser) -> Listing {
         Listing {
-            vendor,
-            amount,
             price,
+            amount,
+            vendor,
         }
     }
 
-    pub fn vendor(&self) -> u64 {
-        self.vendor
+    pub fn price(&self) -> f32 {
+        self.price
     }
 
     pub fn amount(&self) -> u32 {
         self.amount
     }
 
-    pub fn price(&self) -> f32 {
-        self.price
+    pub fn vendor(&self) -> &RobloxUser {
+        &self.vendor
     }
 }
+
 struct ListingVisitor;
 
 impl <'de> Visitor<'de> for ListingVisitor {
@@ -108,9 +111,29 @@ impl <'de> Deserialize<'de> for Listing {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+// fn datetime_to_bson<S>(val: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Error>
+// where
+//     S: Serializer,
+// {
+//     let bson_datetime = bson::DateTime::from_chrono(val);
+//     bson_datetime.serialize(serializer)
+// }
+
+fn datetime_from_bson<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let bson_datetime = bson::DateTime::deserialize(deserializer)?;
+    Ok(bson_datetime.to_chrono())
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Item {
     name: String,
+    #[serde(rename = "_id")]
+    id: u32,
+    #[serde(deserialize_with = "datetime_from_bson")]
+    time_scanned: DateTime<Utc>,
     buy: Vec<Listing>,
     sell: Vec<Listing>,
 }
@@ -119,6 +142,8 @@ impl Item {
     pub fn new() -> Item {
         Item {
             name: String::from(""),
+            id: 0,
+            time_scanned: Utc::now(),
             buy: Vec::new(),
             sell: Vec::new(),
         }
@@ -139,22 +164,14 @@ impl Item {
     pub fn sell(&self) -> &Vec<Listing> {
         &self.sell
     }
-
-    pub fn add_buy(&mut self, vendor: u64, amount: u32, price: f32) {
-        self.buy.push(Listing::new(vendor, amount, price));
-    }
-
-    pub fn add_sell(&mut self, vendor: u64, amount: u32, price: f32) {
-        self.sell.push(Listing::new(vendor, amount, price));
-    }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Market {
     #[serde(rename = "_id")]
     id: u32,
-    time_scanned: DateTime,
-    location: String,
+    #[serde(deserialize_with = "datetime_from_bson")]
+    time_scanned: DateTime<Utc>,
     items: HashMap<String, Item>,
 }
 
@@ -163,9 +180,7 @@ impl Market {
     pub fn new() -> Market {
         Market {
             id: 0,
-            time_scanned: DateTime::now(),
-            location: String::from(""),
-            // time_scanned: Map::new(),
+            time_scanned: Utc::now(),
             items: HashMap::new(),
         }
     }
@@ -176,11 +191,20 @@ impl Market {
         // println!("Items: {:?}", self.items);
     }
 
-    // pub fn time_scanned(&self) -> &String {
-    //     &self.time_scanned
-    // }
+    pub fn time_scanned(&self) -> &DateTime<Utc>{
+        &self.time_scanned
+    }
 
-    // pub fn items(&self) -> &HashMap<String, Item> {
-    //     &self.items
-    // }
+    pub fn items(&self) -> &HashMap<String, Item> {
+        &self.items
+    }
+
+    pub fn get_item(&self, name: &String) -> Option<Item> {
+        Some(self.items.get(name)?.clone())
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct MixedMarket{
+    pub items: HashMap<String, Item>
 }
