@@ -13,27 +13,6 @@ pub struct RawListing {
     price: f32,
 }
 
-impl RawListing {
-    pub fn new(user: u64, amount: u32, price: f32) -> RawListing {
-        RawListing {
-            user,
-            amount,
-            price,
-        }
-    }
-
-    pub fn user(&self) -> u64 {
-        self.user
-    }
-
-    pub fn amount(&self) -> u32 {
-        self.amount
-    }
-
-    pub fn price(&self) -> f32 {
-        self.price
-    }
-}
 struct RawListingVisitor;
 
 impl <'de> Visitor<'de> for RawListingVisitor {
@@ -73,32 +52,6 @@ pub struct RawItem {
     sell: Vec<RawListing>,
 }
 
-impl RawItem {
-    pub fn new() -> RawItem {
-        RawItem {
-            name: String::from(""),
-            buy: Vec::new(),
-            sell: Vec::new(),
-        }
-    }
-    /// Return the name of the Item
-    ///
-    /// # Returns
-    ///
-    /// `String` - The name of the item
-    pub fn name(&self) -> String {
-        self.name.clone()
-    }
-
-    pub fn buy(&self) -> &Vec<RawListing> {
-        &self.buy
-    }
-
-    pub fn sell(&self) -> &Vec<RawListing> {
-        &self.sell
-    }
-}
-
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RawMarket {
     #[serde(rename = "_id")]
@@ -106,30 +59,4 @@ pub struct RawMarket {
     time_scanned: DateTime,
     location: String,
     items: HashMap<String, RawItem>,
-}
-
-
-impl RawMarket {
-    pub fn new() -> RawMarket {
-        RawMarket {
-            id: 0,
-            time_scanned: DateTime::now(),
-            location: String::from(""),
-            items: HashMap::new(),
-        }
-    }
-
-    pub fn display(&self) {
-        println!("ID: {}", self.id);
-        println!("Time Scanned: {}", self.time_scanned);
-        // println!("Items: {:?}", self.items);
-    }
-
-    pub fn time_scanned(&self) -> &DateTime {
-        &self.time_scanned
-    }
-
-    pub fn items(&self) -> &HashMap<String, RawItem> {
-        &self.items
-    }
 }

@@ -23,8 +23,6 @@ pub struct Count{
 
 #[derive(Clone)]
 pub struct VioDB {
-    uri: String,
-    client: Client,
     pub db: Database,
 }
 
@@ -33,8 +31,6 @@ impl VioDB {
         let client: Client = Client::with_uri_str(uri).await?;
         let db: Database = client.database(database);
         Ok(VioDB {
-            uri: uri.to_string(),
-            client,
             db,
         })
     }
@@ -107,25 +103,34 @@ impl VioDB {
     //     Ok(markets)
     // }
 
-    pub async fn get_market_for_item(&self, item: String) -> mongodb::error::Result<Vec<Document>> { 
+    pub async fn get_market_for_item(&self, item: String) -> mongodb::error::Result<Vec<Item>> { 
         let collection: Collection<Document> = self.db.collection("Market");
 
         let projection = doc! {
             "_id": 1,
             "time_scanned": 1,
-            format!("items.{}", item): 1
+            format!("items.{}", &item): 1
         };
-        let find_options = FindOptions::builder().projection(projection).build();
-        let cursor: Cursor<Document> = collection.find(doc! {"_id": {"$gt": 0}}, find_options).await?;
+        let find_options = FindOptions::builder()
+            .projection(projection)
+            .limit(1000)
+            .sort(doc! {"_id": -1})
+            .build();
+        let cursor: Cursor<Document> = collection.find(
+            doc! {"_id": {"$gt": 0},
+            format!("items.{}", &item): {"$exists": true}}, 
+            find_options
+        ).await?;
         let all_items: Vec<Result<Document, mongodb::error::Error>> = cursor.collect().await;
         let roblox_users = Arc::new(self.get_roblox_users().await?);
 
-        let item_instances: Arc<Mutex<HashMap<u32, Document>>> = Arc::new(Mutex::new(HashMap::new()));
+        let item_instances: Arc<Mutex<HashMap<u32, Item>>> = Arc::new(Mutex::new(HashMap::new()));
 
         let mut tasks: Vec<tokio::task::JoinHandle<Result<(), Box<dyn std::error::Error + Send + Sync>>>> = Vec::new();
 
         for docu in all_items {
             let docu = docu?;
+            let item = item.clone();
             let roblox_users = Arc::clone(&roblox_users);
             let item_instances = Arc::clone(&item_instances);
 
@@ -134,9 +139,11 @@ impl VioDB {
                     async move {
                         let market_data = insert_users_into_market_data(docu, &roblox_users).await?;
                         let id = market_data.get_i32("_id").unwrap() as u32;
+                        let market: Market = mongodb::bson::from_document(market_data).unwrap();
+                        let item_inst = market.get_item(&item).unwrap();
                         {
                             let mut item_instances = item_instances.lock().unwrap();
-                            item_instances.insert(id, market_data);
+                            item_instances.insert(id, item_inst);
                         }
                         Ok::<(), Box<dyn std::error::Error + Send + Sync>>(())
                     }
@@ -147,7 +154,9 @@ impl VioDB {
         let _ = futures::future::try_join_all(tasks).await;
 
         let data = item_instances.lock().unwrap();
-        let vec: Vec<Document> = data.values().cloned().collect();
+        let mut vec: Vec<Item> = data.values().cloned().collect();
+
+        vec.sort_by_key(|item| item.id);
 
         Ok(vec)
     }
@@ -175,9 +184,9 @@ impl VioDB {
     // }
 
     pub async fn get_latest_instance(&self, items: &Vec<String>) -> mongodb::error::Result<Option<MixedMarket>> {
-        let mut queryMap: HashMap<String, Item> = HashMap::new();
+        let mut query_map: HashMap<String, Item> = HashMap::new();
         let col = self.db.collection("Market");
-        let mut options = FindOneOptions::builder().sort(doc! {"_id": -1});
+        let options = FindOneOptions::builder().sort(doc! {"_id": -1});
 
         let roblox_users = self.get_roblox_users().await?;
 
@@ -187,13 +196,13 @@ impl VioDB {
             if let Some(docu) = docu {
                 let fixed_doc = insert_users_into_market_data(docu, &roblox_users).await?;
                 let processed_doc: Market = mongodb::bson::from_document(fixed_doc)?;
-                queryMap.insert(item.clone(), processed_doc.get_item(item).unwrap());
+                query_map.insert(item.clone(), processed_doc.get_item(item).unwrap());
             }
         }
 
 
         Ok(Some(MixedMarket{
-            items: queryMap
+            items: query_map
         }))
     }
 
@@ -228,5 +237,24 @@ impl VioDB {
         } else {
             Ok(None)
         }
+    }
+
+    pub async fn get_item_list(&self) -> mongodb::error::Result<Vec<String>> {
+        let collection: Collection<Document> = self.db.collection("Info");
+        let cursor: Option<Document> = collection.find_one(doc! {"_id": 0}, None).await.unwrap();
+        let mut items: Vec<String> = Vec::new();
+        if let Some(docu) = cursor {
+            let docu = docu.get_array("items").unwrap();
+            for item in docu {
+                items.push(item.as_str().unwrap().to_string());
+            }
+        }
+        Ok(items)
+    }
+
+    pub async fn confirm_api_key(&self, key: &str) -> mongodb::error::Result<bool> {
+        let collection: Collection<Document> = self.db.collection("API");
+        let docu: Option<Document> = collection.find_one(doc! {"_id": key}, None).await?;
+        Ok(docu.is_some())
     }
 }

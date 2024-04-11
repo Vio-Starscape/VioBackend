@@ -1,16 +1,20 @@
 [package]
-name = "vio-backend"
-version = "0.1.1"
+name = "vio_api"
+version = "0.2.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
 serde = "1.0.188"
+log = "0.4.21"
+env_logger = "0.11.3"
+serde_json = "1.0"
 dotenv = "0.15.0"
 futures = "0.3.28"
 schemars = { version = "0.8", features = ["chrono"] }
 chrono = { version = "0.4", features = ["serde"] } 
-rocket_okapi = {version="0.8.0", features = ["rapidoc", "rocket_ws"]}
+rocket_cors = "0.6.0"
+rocket_okapi = {version="0.8.0", features = ["rapidoc"]}
 bson = { version = "2.0.0-beta.1", features = ["chrono-0_4"] }
 tokio = {version = "1.32.0", features = ["full"]}
 rocket = { version = "0.5.0-rc.1", features = ["json"] }
