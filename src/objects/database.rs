@@ -1,7 +1,10 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use log::info;
 use serde::{Serialize, Deserialize};
+use serde_json::Value;
 use std::sync::{Arc, Mutex};
 use futures::stream::StreamExt;
+use reqwest::Client as ReqwestClient;
 use mongodb::{
     bson::{doc, Document},
     options::FindOptions,
@@ -12,7 +15,7 @@ use mongodb::{
     Collection
 };
 
-use super::market::market::{RobloxUser, Market, MixedMarket, Item};
+use super::market::{market::{Item, Market, MixedMarket, RobloxUser}, raw_market::RawMarket};
 use super::market::helper::insert_users_into_market_data;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -24,6 +27,7 @@ pub struct Count{
 #[derive(Clone)]
 pub struct VioDB {
     pub db: Database,
+
 }
 
 impl VioDB {
@@ -103,6 +107,103 @@ impl VioDB {
     //     Ok(markets)
     // }
 
+    pub async fn add_roblox_users_to_database(&self, market: &RawMarket) -> mongodb::error::Result<()> {
+        let collection: Collection<RobloxUser> = self.db.collection("Roblox");
+        let mut ids: HashSet<u64> = HashSet::new();
+
+        for item in market.items.values() {
+            for listing in item.buy.iter() {
+                ids.insert(listing.user);
+            }
+            for listing in item.sell.iter() {
+                ids.insert(listing.user);
+            }
+        }
+
+        let existing_ids: Vec<u64> = self.get_roblox_users().await?.keys().map(|&id| id).collect();
+        ids.retain(|id| !existing_ids.contains(id));
+
+        let client = ReqwestClient::new();
+        let chunk_size = 50;
+        for ids_chunk in ids.into_iter().collect::<Vec<_>>().chunks(chunk_size) {
+            let ids_chunk: Vec<i64> = ids_chunk.iter().map(|&id| id as i64).collect();
+            let response = client
+                .post("https://users.roblox.com/v1/users")
+                .json(&doc! {"userIds": ids_chunk, "excludeBannedUsers": false})
+                .send()
+                .await;
+            let users: Value = response.unwrap().json().await.unwrap();
+
+            if let Value::Array(data) = &users["data"] {
+                let mut roblox_users: Vec<RobloxUser> = Vec::new();
+                for user in data {
+                    if let Value::Object(user) = user {
+                        let id = user["id"].as_u64().unwrap();
+                        let name = user["name"].as_str().unwrap();
+                        let display_name = user["displayName"].as_str().unwrap();
+                        let roblox_user = RobloxUser {
+                            id,
+                            name: name.to_string(),
+                            display_name: display_name.to_string()
+                        };
+                        roblox_users.push(roblox_user);
+                    }
+                }
+                collection.insert_many(roblox_users, None).await?;
+            }
+
+            tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+        }
+        
+
+        Ok(())
+    }
+
+    pub async fn add_market_to_database(&self, market: RawMarket) -> mongodb::error::Result<()> {
+        self.add_roblox_users_to_database(&market).await?;
+
+        let collection: Collection<Document> = self.db.collection("Market");
+        let count = self.get_and_increment_market_count().await?;
+
+        let mut market_doc = mongodb::bson::to_document(&market)
+            .map_err(
+                |e| {
+                    info!("Error: {}", e);
+                    e
+                }
+            )?;
+    
+        if let Some(time_scanned) = market_doc.get("time_scanned") {
+            if let Ok(time_scanned) = time_scanned.to_string().parse::<i64>() {
+                market_doc.insert("time_scanned", bson::DateTime::from_millis(time_scanned));
+            }
+        }
+
+        if let Some(items) = market_doc.get_array_mut("items").ok() {
+        items.sort_by(|a, b| {
+            let a = a.as_document().and_then(|doc| doc.get_str("name").ok()).unwrap_or("");
+            let b = b.as_document().and_then(|doc| doc.get_str("name").ok()).unwrap_or("");
+            a.cmp(b)
+        });
+    }
+
+        let market = doc! {
+            "_id": count,
+            "location": market_doc.get("location").unwrap(),
+            "time_scanned": market_doc.get("time_scanned").unwrap(),
+            "items": market_doc.get("items").unwrap()
+        };
+
+        collection.insert_one(market, None).await
+            .map_err(
+                |e| {
+                    info!("Error: {}", e);
+                    e
+                }
+            )?;
+        Ok(())
+    }
+
     pub async fn get_market_for_item(&self, item: String) -> mongodb::error::Result<Vec<Item>> { 
         let collection: Collection<Document> = self.db.collection("Market");
 
@@ -172,6 +273,15 @@ impl VioDB {
         }
     }
 
+    pub async fn get_and_increment_market_count(&self) -> mongodb::error::Result<u32> {
+        let collection: Collection<Document> = self.db.collection("Market");
+        let count: Option<Count> = self.get_market_count().await?;
+        let count = count.unwrap();
+        let new_count = count.count + 1;
+        collection.update_one(doc! {"_id": 0}, doc! {"$set": {"count": new_count}}, None).await?;
+        Ok(new_count)
+    }
+
     // pub async fn get_latest_raw_instance(&self) -> mongodb::error::Result<Option<RawMarket>> {
     //     let count: Option<Count> = self.get_market_count().await?;
     //     if let Some(c) = count {
@@ -183,7 +293,7 @@ impl VioDB {
     //     }
     // }
 
-    pub async fn get_latest_instance(&self, items: &Vec<String>) -> mongodb::error::Result<Option<MixedMarket>> {
+    pub async fn get_latest_instance(&self, items: &Vec<String>) -> mongodb::error::Result<MixedMarket> {
         let mut query_map: HashMap<String, Item> = HashMap::new();
         let col = self.db.collection("Market");
         let options = FindOneOptions::builder().sort(doc! {"_id": -1});
@@ -200,10 +310,9 @@ impl VioDB {
             }
         }
 
-
-        Ok(Some(MixedMarket{
+        Ok(MixedMarket{
             items: query_map
-        }))
+        })
     }
 
     pub async fn get_recent_instance(&self) -> mongodb::error::Result<Option<Market>> {

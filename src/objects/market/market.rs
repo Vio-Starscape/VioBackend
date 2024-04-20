@@ -1,5 +1,6 @@
 use mongodb::bson::doc;
 use mongodb::bson;
+use rust_decimal::Decimal;
 use chrono::{DateTime, Utc};
 
 use std::collections::HashMap;
@@ -87,7 +88,7 @@ pub struct Item {
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct Market {
     #[serde(rename = "_id")]
-    d: u32,
+    id: u32,
     #[serde(deserialize_with = "datetime_from_bson")]
     time_scanned: DateTime<Utc>,
     items: HashMap<String, Item>,

@@ -24,11 +24,16 @@ use std::env;
 
 use routes::apiv1;
 
+
+
 #[launch]
 async fn rocket() -> Rocket<Build> {
     dotenv().ok();
     env_logger::init();
-    let db = match VioDB::new(env::var("MONGO_URI").unwrap().as_str(), "Vio").await {
+    let db = match VioDB::new(
+        env::var("MONGO_URI").unwrap().as_str(),
+        env::var("DATABASE_NAME").unwrap().as_str(),
+    ).await {
         Ok(db) => db,
         Err(e) => {
             eprintln!("Failed to create VioDB: {}", e);
@@ -50,7 +55,8 @@ async fn rocket() -> Rocket<Build> {
         .merge(("secret_key", env::var("SECRET_KEY").unwrap().as_str()));
 
     let settings = rocket_okapi::settings::OpenApiSettings::new();
-    let routes = openapi_get_routes!{settings: apiv1::latest_market, apiv1::recent_market, apiv1::item_list, apiv1::item_history};
+    let routes = openapi_get_routes!{
+        settings: apiv1::latest_market, apiv1::recent_market, apiv1::item_list, apiv1::item_history, apiv1::insert_data};
 
     rocket::custom(figment)
         .manage(db)
@@ -74,6 +80,6 @@ async fn rocket() -> Rocket<Build> {
             },
             ..Default::default()  
         }))
-        .register("/v1", catchers![apiv1::unauthorized, apiv1::not_found, apiv1::bad_request])
+        .register("/v1", catchers![apiv1::unauthorized, apiv1::not_found, apiv1::bad_request, apiv1::unprocessable_entity])
         .attach(cors)
 }

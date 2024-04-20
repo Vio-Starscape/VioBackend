@@ -1,17 +1,17 @@
 use rocket::{
-    catch, get, http::Status, request::{FromRequest, Outcome, Request}, response::Responder, serde::json::Json, State,
-    response, Response
+    catch, get, http::Status, post, request::{FromRequest, Outcome, Request}, response::{self, Responder}, serde::json::Json, Response, State
 };
+use rocket_ws::{WebSocket, Channel};
 
 use log::{info, debug};
-
+use std::env;
 use serde_json;
 use rocket_okapi::{openapi, request::{OpenApiFromRequest, RequestHeaderInput}, gen::OpenApiGenerator, OpenApiError};
 use rocket_okapi::response::OpenApiResponderInner;
 use rocket_okapi::okapi::openapi3::{Object, Responses, SecurityRequirement, SecurityScheme, SecuritySchemeData, MediaType};
 use rocket_okapi::okapi::openapi3::RefOr;
 use rocket_okapi::okapi;
-use crate::objects::{database::VioDB, market::market::MixedMarket, market::market::Item};
+use crate::objects::{database::VioDB, market::{market::{Item, MixedMarket}, raw_market::RawMarket}};
 use crate::objects::market::market::Market;
 
 #[derive(Debug, serde::Serialize, schemars::JsonSchema)]
@@ -41,9 +41,19 @@ impl OpenApiResponderInner for MyError {
                 "400".to_owned() => RefOr::Object(bad_request_response(gen)),
                 "401".to_owned() => RefOr::Object(unauthorized_response(gen)),
                 "404".to_owned() => RefOr::Object(not_found_response(gen)),
+                "422".to_owned() => RefOr::Object(unprocessable_entity_response(gen)),
             },
             ..Default::default()
         })
+    }
+}
+
+#[catch(422)]
+pub fn unprocessable_entity() -> MyError {
+    MyError {
+        err: "Unprocessable Entity".to_owned(),
+        msg: Some("The request was well-formed but was unable to be followed due to semantic errors.".to_owned()),
+        http_status_code: 422,
     }
 }
 
@@ -129,6 +139,24 @@ pub fn bad_request_response(gen: &mut OpenApiGenerator) -> okapi::openapi3::Resp
     }
 }
 
+pub fn unprocessable_entity_response(gen: &mut OpenApiGenerator) -> okapi::openapi3::Response  {
+    let schema = gen.json_schema::<MyError>();
+    okapi::openapi3::Response {
+        description: "\
+        # 422 Unprocessable Entity\n\
+        The request was well-formed but was unable to be followed due to semantic errors. \
+        "
+        .to_owned(),
+        content: okapi::map! {
+            "application/json".to_owned() => MediaType {
+                schema: Some(schema),
+                ..Default::default()
+            }
+        },
+        ..Default::default()
+    }
+}
+
 pub struct ApiKey(String);
 
 #[rocket::async_trait]
@@ -192,8 +220,10 @@ impl<'a> OpenApiFromRequest<'a> for ApiKey {
 /// # Latest Market (Keyword Only)
 ///
 /// Get the latest market data for a list of items.
+/// This difference between this and the recent market is that this will look for the last instance of an Item.
+/// It should always return something if the item is in the database.
 ///
-/// If no items are provided, will not return anything / 404.
+/// If no items are provided, will 404.
 #[openapi]
 #[get("/market/latest?<items>")]
 pub async fn latest_market(_key: ApiKey, db: &State<VioDB>, items: Option<&str>) -> Result<Json<MixedMarket>, Status> {
@@ -201,8 +231,8 @@ pub async fn latest_market(_key: ApiKey, db: &State<VioDB>, items: Option<&str>)
     match items {
         Some(items) => {
             let item = items.split(",").map(|name| name.to_string()).collect();
-            let market = db.get_latest_instance(&item).await.ok().unwrap();
-            match market {
+            let market = db.get_latest_instance(&item).await;
+            match market.ok() {
                 Some(market) => Ok(Json(market)),
                 None => Err(Status::NotFound)
             }
@@ -217,6 +247,7 @@ pub async fn latest_market(_key: ApiKey, db: &State<VioDB>, items: Option<&str>)
 ///
 /// If no items are provided, will return the entire most recent scan.
 /// else will return only the requested items in the most recent scan.
+/// 
 #[openapi]
 #[get("/market/recent?<items>")]
 pub async fn recent_market(_key:ApiKey, db: &State<VioDB>, items: Option<&str>) -> Result<Json<Market>, Status> {
@@ -224,9 +255,7 @@ pub async fn recent_market(_key:ApiKey, db: &State<VioDB>, items: Option<&str>) 
     match items {
         Some(items) => {
             let item = items.split(",").map(|name| name.to_string()).collect();
-            println!("{:?}", item);
             let market = db.get_recent_instance_filter(&item).await.ok();
-            println!("{:?}", market);
             match market.unwrap() {
                 Some(market) => Ok(Json(market)),
                 None => Err(Status::NotFound)
@@ -266,3 +295,37 @@ pub async fn item_history(_key: ApiKey, db: &State<VioDB>, item: &str) -> Result
     let market = db.get_market_for_item(item.to_string()).await.ok().unwrap();
     Ok(Json(market))
 }
+
+
+// Websocket and Dataendpoint
+
+// type SharedState = std::sync::Arc<tokio::sync::Mutex<HashMap<String, WebSocket>>>;
+
+
+#[openapi(skip)]
+#[post("/market/insert/data", format="json", data="<data>")]
+pub async fn insert_data(_key: ApiKey, db: &State<VioDB>, data: Json<RawMarket>) -> Result<Json<String>, Status> {
+    info!("Inserting data | by: {}", _key.0);
+    if _key.0 != env::var("ADMIN_KEY").unwrap() {
+        return Err(Status::Unauthorized);
+    }
+    db.add_market_to_database(data.0).await.ok().unwrap();
+    info!("Data Inserted");
+    Ok(Json("Data Inserted".to_string()))
+}
+
+
+// #[openapi()]
+// #[get("/market/ws")]
+// pub async fn ws_endpoint(_key: ApiKey, ws: WebSocket) -> Channel<'static> {
+//     info!("Getting websocket endpoint | by: {}", _key.0);
+//     use rocket::futures::{SinkExt, StreamExt};
+
+//     ws.channel(move |mut stream| Box::pin(async move{
+//         while let Some(msg) = stream.next().await {
+//             let _ = stream.send(msg?).await;
+//         }
+
+//         Ok(())
+//     }))
+// }
