@@ -1,13 +1,13 @@
-use bson::Bson;
-use mongodb::bson::doc;
-use rust_decimal::Decimal;
+use mongodb::bson::{doc, Bson};
 use std::collections::BTreeMap;
 use std::fmt;
+use std::str::FromStr;
 use chrono::{DateTime, Utc};
 use chrono::serde::ts_milliseconds::serialize as chrono_serialize;
-use schemars::JsonSchema;
-use serde::de::{self, SeqAccess, Visitor};
-use serde::{Deserialize, Serialize, Serializer, ser::SerializeSeq};
+use serde::de::{self, SeqAccess, Visitor, Error as DeError};
+use serde::{Deserialize, Serialize, Deserializer, Serializer, ser::SerializeSeq};
+use rust_decimal::Decimal;
+
 
 #[derive(Debug)]
 pub struct RawListing {
@@ -22,8 +22,13 @@ impl Serialize for RawListing {
         S: Serializer,
     {
         let mut seq = serializer.serialize_seq(Some(3))?;
-        seq.serialize_element(&self.price)?;
-        let price = Bson::Decimal128(self.price.into());
+        
+        // Convert Decimal to String, then parse to f64
+        let decimal_str = self.price.to_string();
+        let price_f64: f64 = decimal_str.parse().map_err(serde::ser::Error::custom)?;
+        
+        // Serialize the f64 as Bson::Double
+        seq.serialize_element(&Bson::Double(price_f64))?;
         seq.serialize_element(&self.amount)?;
         seq.serialize_element(&self.user)?;
         seq.end()
@@ -62,14 +67,14 @@ impl <'de> Deserialize<'de> for RawListing {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct RawItem {
     pub name: String,
     pub buy: Vec<RawListing>,
     pub sell: Vec<RawListing>,
 }
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct RawMarket {
     #[serde(serialize_with = "chrono_serialize")]
     pub time_scanned: DateTime<Utc>,

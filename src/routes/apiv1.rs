@@ -1,7 +1,6 @@
 use rocket::{
     catch, get, http::Status, post, request::{FromRequest, Outcome, Request}, response::{self, Responder}, serde::json::Json, Response, State
 };
-use rocket_ws::{WebSocket, Channel};
 
 use log::{info, debug};
 use std::env;
@@ -247,6 +246,8 @@ pub async fn latest_market(_key: ApiKey, db: &State<VioDB>, items: Option<&str>)
 ///
 /// If no items are provided, will return the entire most recent scan.
 /// else will return only the requested items in the most recent scan.
+/// 
+/// Sometimes the scans miss a bunch of items, so only use this if you plan on storing the data yourself aswell.
 /// 
 #[openapi]
 #[get("/market/recent?<items>")]

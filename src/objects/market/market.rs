@@ -1,6 +1,5 @@
 use mongodb::bson::doc;
 use mongodb::bson;
-use rust_decimal::Decimal;
 use chrono::{DateTime, Utc};
 
 use std::collections::HashMap;

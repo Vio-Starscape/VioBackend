@@ -20,7 +20,7 @@ bson = { version = "2.0.0-beta.1", features = ["chrono-0_4"] }
 tokio = {version = "1.32.0", features = ["full"]}
 rocket = { version = "0.5.0-rc.1", features = ["json"] }
 rocket_ws = { version = "0.1.0" }
-rust_decimal = "1.35.0"
+rust_decimal = { version="1.35.0", features = ["serde"] }
 
 [dependencies.mongodb]
 version = "2.8.0"
