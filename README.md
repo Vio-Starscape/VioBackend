@@ -8,4 +8,4 @@ Let me answer some of your question below!
 
 ## What is a Starscape Market Service
 
-Well, a Starscape Market Service is a service that relates to the In-Game Market for Starscape. There is a terminal in the game where listings are provided 
+Well, a Starscape Market Service is a service that relates to the In-Game Market for Starscape. There is a terminal in the game where listings are provided, and with this api you can retrieve that information!
