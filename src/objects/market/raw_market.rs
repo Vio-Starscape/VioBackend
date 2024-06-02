@@ -1,11 +1,10 @@
 use mongodb::bson::{doc, Bson};
 use std::collections::BTreeMap;
 use std::fmt;
-use std::str::FromStr;
 use chrono::{DateTime, Utc};
 use chrono::serde::ts_milliseconds::serialize as chrono_serialize;
-use serde::de::{self, SeqAccess, Visitor, Error as DeError};
-use serde::{Deserialize, Serialize, Deserializer, Serializer, ser::SerializeSeq};
+use serde::de::{self, SeqAccess, Visitor};
+use serde::{Deserialize, Serialize, Serializer, ser::SerializeSeq};
 use rust_decimal::Decimal;
 
 
