@@ -159,10 +159,25 @@ impl VioDB {
         Ok(())
     }
 
+    pub async fn add_new_item_names_to_database(&self, items: Vec<String>) -> mongodb::error::Result<()> {
+        let collection: Collection<Document> = self.db.collection("Info");
+        let docu: Option<Document> = collection.find_one(doc! {"_id": 0}, None).await?;
+        let mut items: HashSet<String> = items.into_iter().collect();
+        if let Some(docu) = docu {
+            let docu = docu.get_array("items").unwrap();
+            for item in docu {
+                items.insert(item.as_str().unwrap().to_string());
+            }
+        }
+        let items: Vec<String> = items.into_iter().collect();
+        collection.update_one(doc! {"_id": 0}, doc! {"$set": {"items": items}}, None).await?;
+        Ok(())
+    }
+
     pub async fn add_market_to_database(&self, market: RawMarket) -> mongodb::error::Result<()> {
         self.add_roblox_users_to_database(&market).await?;
 
-        let collection: Collection<Document> = self.db.collection("Market");
+        let collection: Collection<Document> = self.db.collection("CompletedMarket");
         let count = self.get_and_increment_market_count().await?;
 
         let mut market_doc = mongodb::bson::to_document(&market)
@@ -193,6 +208,10 @@ impl VioDB {
             "time_scanned": market_doc.get("time_scanned").unwrap(),
             "items": market_doc.get("items").unwrap()
         };
+
+        let items_doc = market_doc.get_document("items").unwrap();
+        let item_names: Vec<String> = items_doc.keys().map(|name| name.to_string()).collect();
+        self.add_new_item_names_to_database(item_names).await?;
 
         collection.insert_one(market, None).await
             .map_err(
