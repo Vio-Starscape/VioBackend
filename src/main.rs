@@ -9,6 +9,7 @@ mod objects {
 
 mod routes {
     pub mod apiv1;
+    pub mod ratelimiter;
 }
 use objects::database::*;
 
@@ -21,8 +22,9 @@ use rocket_okapi::{rapidoc::*, openapi_get_routes};
 use rocket_cors::{AllowedOrigins, AllowedHeaders, CorsOptions};
 use rocket_okapi::settings::UrlObject;
 use std::env;
+use std::sync::Mutex;
 
-use routes::apiv1;
+use routes::{apiv1, ratelimiter};
 
 
 
@@ -60,6 +62,9 @@ async fn rocket() -> Rocket<Build> {
 
     rocket::custom(figment)
         .manage(db)
+        .manage(ratelimiter::RequestCount {
+            counts: Mutex::new(std::collections::HashMap::new())
+        })
         .mount("/v1", routes)
         .mount("/",
         make_rapidoc(&RapiDocConfig { 
