@@ -9,7 +9,9 @@ mod objects {
 
 mod routes {
     pub mod apiv1;
+    pub mod errors;
     pub mod ratelimiter;
+    pub mod key;
 }
 use objects::database::*;
 
@@ -25,8 +27,7 @@ use std::env;
 use std::sync::Mutex;
 
 use routes::{apiv1, ratelimiter};
-
-
+use routes::errors;
 
 #[launch]
 async fn rocket() -> Rocket<Build> {
@@ -85,6 +86,6 @@ async fn rocket() -> Rocket<Build> {
             },
             ..Default::default()  
         }))
-        .register("/v1", catchers![apiv1::unauthorized, apiv1::not_found, apiv1::bad_request, apiv1::unprocessable_entity])
+        .register("/v1", catchers![errors::unauthorized, errors::not_found, errors::bad_request, errors::unprocessable_entity])
         .attach(cors)
 }
