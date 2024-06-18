@@ -13,6 +13,8 @@ use rocket_okapi::okapi;
 use crate::objects::{database::VioDB, market::{market::{Item, MixedMarket}, raw_market::RawMarket}};
 use crate::objects::market::market::Market;
 
+use crate::routes::ratelimiter;
+
 #[derive(Debug, serde::Serialize, schemars::JsonSchema)]
 pub struct MyError {
     pub err: String,
@@ -165,10 +167,16 @@ impl<'r> FromRequest<'r> for ApiKey {
     async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
         let key_header = request.headers().get_one("x-api-key");
         let db = request.guard::<&State<VioDB>>().await.unwrap();
+        let count = request.guard::<&State<ratelimiter::RequestCount>>().await.unwrap();
+
         match key_header {
             Some(key) if db.confirm_api_key(key).await.unwrap() => {
-                debug!("API Key: {}", key);
-                Outcome::Success(ApiKey(key.to_string()))
+                let counter = count.increment(key);
+                if counter > 60 {
+                    Outcome::Error((Status::TooManyRequests, ()))
+                } else {
+                    Outcome::Success(ApiKey(key.to_string()))
+                }
             },
             _ => Outcome::Error((Status::Unauthorized, ()))
         }
@@ -221,6 +229,8 @@ impl<'a> OpenApiFromRequest<'a> for ApiKey {
 /// Get the latest market data for a list of items.
 /// This difference between this and the recent market is that this will look for the last instance of an Item.
 /// It should always return something if the item is in the database.
+/// 
+/// Provide a list of items separated by commas.
 ///
 /// If no items are provided, will 404.
 #[openapi]
@@ -246,6 +256,8 @@ pub async fn latest_market(_key: ApiKey, db: &State<VioDB>, items: Option<&str>)
 ///
 /// If no items are provided, will return the entire most recent scan.
 /// else will return only the requested items in the most recent scan.
+/// 
+/// Provide a list of items separated by commas.
 /// 
 /// Sometimes the scans miss a bunch of items, so only use this if you plan on storing the data yourself aswell.
 /// 
