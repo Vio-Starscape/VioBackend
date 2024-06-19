@@ -25,7 +25,6 @@ pub async fn insert_users_into_market_data(mut market: Document, roblox_users: &
         for (_, item) in items.iter_mut(){
             let item_doc = item.as_document_mut().unwrap();
             item_doc.insert("_id", id);
-            item_doc.insert("time_scanned", time.clone());
             if let Ok(buy) = item_doc.get_array_mut("buy") {
                 let mut new_buy: Vec<Bson> = Vec::new();
                 for listing in buy {
