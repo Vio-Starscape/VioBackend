@@ -1,3 +1,4 @@
+use chrono::{DateTime, ParseError, Utc};
 use futures::stream::StreamExt;
 use log::info;
 use mongodb::{
@@ -199,28 +200,20 @@ impl VioDB {
             }
         }
 
-        if let Some(items) = market_doc.get_array_mut("items").ok() {
-            items.sort_by(|a, b| {
-                let a = a
-                    .as_document()
-                    .and_then(|doc| doc.get_str("name").ok())
-                    .unwrap_or("");
-                let b = b
-                    .as_document()
-                    .and_then(|doc| doc.get_str("name").ok())
-                    .unwrap_or("");
-                a.cmp(b)
-            });
-
-            for item in items {
-                if let Some(item_doc) = item.as_document_mut() {
-                    if let Some(time_scanned) = item_doc.get("time_scanned") {
-                        if let Ok(time_scanned) = time_scanned.to_string().parse::<i64>() {
-                            item_doc.insert("time_scanned", bson::DateTime::from_millis(time_scanned));
+        match market_doc.get_document_mut("items") {
+            Ok(items) => {
+                for (_key, value) in items.iter_mut() {
+                    if let Some(doc) = value.as_document_mut() {
+                        if let Some(time_scanned) = doc.get("time_scanned") {
+                            if let Ok(time_scanned) = time_scanned.to_string().parse::<i64>() {
+                                let date = bson::DateTime::from_millis(time_scanned);
+                                doc.insert("time_scanned", date);
+                            }
                         }
                     }
                 }
-            }
+            },
+            Err(e) => println!("Failed to get mutable reference to items: {}", e),
         }
 
         let market = doc! {

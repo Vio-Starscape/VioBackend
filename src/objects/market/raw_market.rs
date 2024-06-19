@@ -69,6 +69,7 @@ impl <'de> Deserialize<'de> for RawListing {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RawItem {
     pub name: String,
+    #[serde(serialize_with = "chrono_serialize")]
     pub time_scanned: DateTime<Utc>,
     pub buy: Vec<RawListing>,
     pub sell: Vec<RawListing>,
