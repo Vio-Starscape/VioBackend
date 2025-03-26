@@ -29,6 +29,11 @@ use std::sync::Mutex;
 use routes::{apiv1, ratelimiter};
 use routes::errors;
 
+#[options("/v1/<_..>")]
+fn options_v1_all() -> rocket::http::Status {
+    println!("OPTIONS /v1/* preflight handled.");
+    rocket::http::Status::Ok
+}
 #[launch]
 async fn rocket() -> Rocket<Build> {
     dotenv().ok();
@@ -59,7 +64,7 @@ async fn rocket() -> Rocket<Build> {
 
     let settings = rocket_okapi::settings::OpenApiSettings::new();
     let routes = openapi_get_routes!{
-        settings: apiv1::latest_market, apiv1::recent_market, apiv1::item_list, apiv1::item_history, apiv1::insert_data};
+        settings: apiv1::latest_market, apiv1::recent_market, apiv1::item_list, apiv1::item_history, apiv1::insert_data, options_v1_all};
 
     rocket::custom(figment)
         .manage(db)
