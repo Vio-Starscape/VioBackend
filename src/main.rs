@@ -48,8 +48,8 @@ async fn rocket() -> Rocket<Build> {
 
     let cors = CorsOptions::default() 
         .allowed_origins(AllowedOrigins::all()) // Customize allowed origins if needed
-        .allowed_headers(AllowedHeaders::all()) // Add more headers as required
-        .allow_credentials(true)
+        .allowed_headers(AllowedHeaders::some(&["Authorization", "Accept", "x-api-key", "Content-Type"])) // Add more headers as required
+        .allow_credentials(false)
         .to_cors().unwrap();
 
     let figment = Config::figment()
