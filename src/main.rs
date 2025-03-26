@@ -19,7 +19,7 @@ use log::info;
 
 use dotenv::dotenv;
 use rocket::catchers;
-use rocket::{launch, Rocket, Build, config::Config};
+use rocket::{launch, Rocket, Build, config::Config, options, routes};
 use rocket_okapi::{rapidoc::*, openapi_get_routes};
 use rocket_cors::{AllowedOrigins, AllowedHeaders, CorsOptions};
 use rocket_okapi::settings::UrlObject;
@@ -65,7 +65,7 @@ async fn rocket() -> Rocket<Build> {
 
     let settings = rocket_okapi::settings::OpenApiSettings::new();
     let routes = openapi_get_routes!{
-        settings: apiv1::latest_market, apiv1::recent_market, apiv1::item_list, apiv1::item_history, apiv1::insert_data, options_v1_all};
+        settings: apiv1::latest_market, apiv1::recent_market, apiv1::item_list, apiv1::item_history, apiv1::insert_data};
 
     rocket::custom(figment)
         .manage(db)
@@ -73,6 +73,7 @@ async fn rocket() -> Rocket<Build> {
             counts: Mutex::new(std::collections::HashMap::new())
         })
         .mount("/v1", routes)
+        .mount("/v1", routes![options_v1_all])
         .mount("/",
         make_rapidoc(&RapiDocConfig { 
             general: GeneralConfig {
