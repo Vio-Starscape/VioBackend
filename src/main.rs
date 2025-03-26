@@ -29,7 +29,7 @@ use std::sync::Mutex;
 use routes::{apiv1, ratelimiter};
 use routes::errors;
 
-#[options("/v1/<_..>")]
+#[options("/<_..>")]
 fn options_v1_all() -> rocket::http::Status {
     println!("OPTIONS /v1/* preflight handled.");
     rocket::http::Status::Ok
