@@ -1,4 +1,4 @@
-FROM rust:1.76 as builder
+FROM rust:1.83 as builder
 
 RUN USER=root cargo new --bin app
 WORKDIR /app
@@ -14,7 +14,7 @@ COPY ./src ./src
 RUN rm ./target/release/deps/vio_api* || true
 RUN cargo build --release
 
-FROM rust:1.76-slim
+FROM rust:1.83-slim
 
 COPY --from=builder /app/target/release/vio_api /usr/local/bin/vio_api
 
