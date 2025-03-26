@@ -34,6 +34,7 @@ fn options_v1_all() -> rocket::http::Status {
     println!("OPTIONS /v1/* preflight handled.");
     rocket::http::Status::Ok
 }
+
 #[launch]
 async fn rocket() -> Rocket<Build> {
     dotenv().ok();
