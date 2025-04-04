@@ -1,6 +1,6 @@
 use crate::routes::ratelimiter;
 use crate::routes::errors::{bad_request_response, unauthorized_response, not_found_response};
-
+use std::env;
 use rocket::{
     http::Status,
     request::{FromRequest, Outcome, Request},
@@ -34,6 +34,12 @@ impl<'r> FromRequest<'r> for ApiKey {
 
         match key_header {
             Some(key) if db.confirm_api_key(key).await.unwrap() => {
+
+                if key == &env::var("ADMIN_KEY").unwrap() {
+                    // Bypass rate limiting for admin keys
+                    return Outcome::Success(ApiKey(key.to_string()));
+                }
+
                 let counter = count.increment(key);
                 if counter > 60 {
                     Outcome::Error((Status::TooManyRequests, ()))
